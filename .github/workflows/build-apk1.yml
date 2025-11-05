@@ -27,41 +27,77 @@ jobs:
         with:
           gradle-version: 8.7
 
-      # Find Android project dir that has settings.gradle(.kts)
-      - name: Find Android project directory
-        id: findproj
+      # Find a directory that contains app/build.gradle or app/build.gradle.kts
+      - name: Detect Android module
+        id: detect
         shell: bash
         run: |
           set -euo pipefail
-          HIT=$(find . -maxdepth 3 -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -n1 || true)
-          if [ -z "${HIT}" ]; then
-            echo "❌ Could not find settings.gradle(.kts)."
+          APP_HIT=$(find . -maxdepth 5 -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -path "*/app/*" | head -n1 || true)
+          if [ -z "${APP_HIT}" ]; then
+            echo "❌ Could not find app/build.gradle(.kts). Check your repo structure."
             exit 1
           fi
-          DIR=$(dirname "$HIT")
+          DIR=$(dirname "$(dirname "$APP_HIT")")   # go up from app/…/build.gradle -> project dir
           DIR="${DIR#./}"
           echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
-          echo "Project directory: $DIR"
+          echo "Project directory detected: $DIR"
           ls -la "$DIR"
+
+      # Create minimal Gradle root files if settings.gradle(.kts) is missing
+      - name: Ensure Gradle root files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if [ ! -f settings.gradle ] && [ ! -f settings.gradle.kts ]; then
+            echo "No settings.gradle(.kts) found — creating one."
+            cat > settings.gradle.kts <<'EOF'
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "SpotMyRepAndroid"
+include(":app")
+EOF
+          fi
+
+          if [ ! -f build.gradle ] && [ ! -f build.gradle.kts ]; then
+            echo "No root build.gradle(.kts) found — creating one."
+            cat > build.gradle.kts <<'EOF'
+plugins {
+    id("com.android.application") version "8.1.2" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.0" apply false
+}
+EOF
+          fi
+
+          echo "Final project root listing:"
+          ls -la
 
       - name: Build debug APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: gradle assembleDebug
 
-      # ✅ Show where Gradle put the APKs
       - name: List build outputs
         run: |
           echo "Looking for APKs..."
-          find ${{ env.PROJECT_DIR }} -type f -name "*.apk" -print || true
-          echo "Listing outputs folder:"
-          ls -la ${{ env.PROJECT_DIR }}/app/build/outputs || true
-          find ${{ env.PROJECT_DIR }}/app/build/outputs -maxdepth 3 -type d -print || true
+          find "${{ env.PROJECT_DIR }}" -type f -name "*.apk" -print || true
 
-      # ✅ Upload any APK in the project (catch-all)
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: spotmyrep-apks
           path: |
             ${{ env.PROJECT_DIR }}/**/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error
