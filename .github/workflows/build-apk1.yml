@@ -11,24 +11,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show repo layout
+        run: |
+          pwd
+          ls -la
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # Install a Gradle runtime (no wrapper required)
+      # Use system Gradle (no gradlew needed)
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.7
 
-      - name: Build debug APK
-        working-directory: SpotMyRepAndroid
-        run: gradle assembleDebug
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: spotmyrep-debug-apk
-          path: SpotMyRepAndroid/app/build/outputs/apk/debug/*.apk
+      # 🔎 Auto-detect Android project root that has settings.gradle(.kts)
+      - name: Find Android project directory
+        id: findproj
+        shell: bash
+        run: |
+          set -e
+          CANDIDATE="."
+          if [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
+            CANDIDATE="."
+          elif [ -f SpotMyRepAndroid/settings.gradle ] || [ -f SpotMyRepAndroid/settings.gradle.kts ]; then
+            C
