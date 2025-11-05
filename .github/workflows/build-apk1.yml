@@ -22,10 +22,46 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Use a system Gradle (no gradlew needed)
-      - name: Set up Gradle
+      - name: Set up Gradle (no wrapper)
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.7
 
-      # 🔎 Auto-detect Android project dir (has settings.gradle
+      # Find Android project dir that has settings.gradle(.kts)
+      - name: Find Android project directory
+        id: findproj
+        shell: bash
+        run: |
+          set -euo pipefail
+          HIT=$(find . -maxdepth 3 -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -n1 || true)
+          if [ -z "${HIT}" ]; then
+            echo "❌ Could not find settings.gradle(.kts)."
+            exit 1
+          fi
+          DIR=$(dirname "$HIT")
+          DIR="${DIR#./}"
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "Project directory: $DIR"
+          ls -la "$DIR"
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug
+
+      # ✅ Show where Gradle put the APKs
+      - name: List build outputs
+        run: |
+          echo "Looking for APKs..."
+          find ${{ env.PROJECT_DIR }} -type f -name "*.apk" -print || true
+          echo "Listing outputs folder:"
+          ls -la ${{ env.PROJECT_DIR }}/app/build/outputs || true
+          find ${{ env.PROJECT_DIR }}/app/build/outputs -maxdepth 3 -type d -print || true
+
+      # ✅ Upload any APK in the project (catch-all)
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotmyrep-apks
+          path: |
+            ${{ env.PROJECT_DIR }}/**/*.apk
+          if-no-files-found: warn
