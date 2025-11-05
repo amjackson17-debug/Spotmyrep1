@@ -11,7 +11,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show repo layout
+      - name: Show repo layout (debug)
         run: |
           pwd
           ls -la
@@ -22,20 +22,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Use system Gradle (no gradlew needed)
+      # Use a system Gradle (no gradlew needed)
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.7
 
-      # 🔎 Auto-detect Android project root that has settings.gradle(.kts)
-      - name: Find Android project directory
-        id: findproj
-        shell: bash
-        run: |
-          set -e
-          CANDIDATE="."
-          if [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
-            CANDIDATE="."
-          elif [ -f SpotMyRepAndroid/settings.gradle ] || [ -f SpotMyRepAndroid/settings.gradle.kts ]; then
-            C
+      # 🔎 Auto-detect Android project dir (has settings.gradle
